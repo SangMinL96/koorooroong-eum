@@ -1,0 +1,4 @@
+# faster-whisper 전사용 (Python 3.9+ 권장)
+#   python3 -m venv .venv-whisper && source .venv-whisper/bin/activate
+#   pip install -r apps/server/scripts/requirements-whisper.txt
+faster-whisper>=1.0.0
