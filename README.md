@@ -37,3 +37,18 @@ yarn mobile:start
 
 자세한 설계: `docs/specs/2026-05-11-voice-search-design.md`
 자세한 계획: `docs/plans/2026-05-11-voice-search.md`
+
+## Status
+
+MVP 구현 완료 (2026-05-11). 사용자 수동 검증 필요:
+
+1. `cp apps/server/.env.example apps/server/.env` 후 `GEMINI_API_KEY` 입력
+2. Apple Silicon: `bash apps/server/scripts/setup-venv-whisper-arm64.sh`
+3. `yarn server:dev` (port 4100)
+4. `cd apps/mobile && yarn start` → Expo Go로 띄우기
+5. 업로드 → 검색 흐름 E2E 확인
+
+엔드포인트:
+- `POST /api/stt` — multipart audio, returns `{transcript, chunks}`
+- `POST /api/embed` — `{texts: string[]}` → `{vectors: number[][]}` (768-dim, text-embedding-004)
+- `POST /api/ask` — `{question, contexts}` → `{answer, sources}` (gemini-2.5-flash)
