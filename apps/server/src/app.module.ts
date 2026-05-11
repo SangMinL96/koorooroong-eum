@@ -4,6 +4,7 @@ import { LlmModule } from './_common/llm/llm.module';
 import { LoggerModule } from './_common/logger/logger.module';
 import { SttModule } from './stt/stt.module';
 import { EmbedModule } from './embed/embed.module';
+import { AskModule } from './ask/ask.module';
 
 @Module({
   imports: [
@@ -12,6 +13,7 @@ import { EmbedModule } from './embed/embed.module';
     LoggerModule,
     SttModule,
     EmbedModule,
+    AskModule,
   ],
   controllers: [],
   providers: [],
