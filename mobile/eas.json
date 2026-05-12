@@ -19,7 +19,7 @@
       "android": {
         "buildType": "apk"
       },
-      "env": {.
+      "env": {
         "EXPO_PUBLIC_API_HOST": "http://10.18.1.38:4100"
       }
     },
