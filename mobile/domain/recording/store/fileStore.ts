@@ -1,4 +1,5 @@
 import * as FileSystem from 'expo-file-system';
+import type { GroundingSource } from '@/lib/types';
 import type { RecordingFile, RecordingIndex, RecordingMeta } from '../types';
 
 const baseDir = () => `${FileSystem.documentDirectory}recordings/`;
@@ -57,6 +58,23 @@ export async function writeRecording(rec: RecordingFile): Promise<void> {
     index.recordings.unshift(meta);
   }
   await writeIndex(index);
+}
+
+export async function updateRecordingSummary(
+  id: string,
+  summary: string,
+  sources?: GroundingSource[],
+): Promise<RecordingFile | null> {
+  const rec = await readRecording(id);
+  if (!rec) return null;
+  const next: RecordingFile = {
+    ...rec,
+    summary,
+    summaryAt: new Date().toISOString(),
+    summarySources: sources && sources.length > 0 ? sources : undefined,
+  };
+  await FileSystem.writeAsStringAsync(recordingPath(id), JSON.stringify(next));
+  return next;
 }
 
 export async function deleteRecording(id: string): Promise<void> {

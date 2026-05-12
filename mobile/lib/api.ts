@@ -1,5 +1,5 @@
 import { API_HOST } from './env';
-import type { ApiResponse } from '@koorooroong-eum/shared-types';
+import type { ApiResponse } from './types';
 
 export class ApiError extends Error {
   constructor(public status: number, public body: unknown) {
@@ -43,6 +43,7 @@ export async function apiPostJson<T>(path: string, body: unknown, init?: Request
 /** multipart/form-data POST. `formData` is required. */
 export async function apiPostMultipart<T>(path: string, formData: FormData, init?: RequestInit): Promise<T> {
   // NOTE: do NOT set Content-Type — the platform fetch sets the boundary automatically.
+  console.log(`${API_HOST}/api${path}`);
   const res = await fetch(`${API_HOST}/api${path}`, {
     method: 'POST',
     body: formData as unknown as BodyInit,

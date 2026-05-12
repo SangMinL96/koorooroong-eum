@@ -26,7 +26,14 @@ export default function UploadScreen() {
 
   const pick = async () => {
     const res = await DocumentPicker.getDocumentAsync({
-      type: ['audio/*'],
+      // m4a 전용. iOS는 UTI, Android는 MIME 매칭이라 둘 다 지정해야 picker가 다른 포맷을 회색 처리한다.
+      type: [
+        'audio/m4a',
+        'audio/x-m4a',
+        'audio/mp4',
+        'public.mpeg-4-audio',
+        'com.apple.m4a-audio',
+      ],
       multiple: false,
       copyToCacheDirectory: true,
     });
@@ -73,7 +80,7 @@ export default function UploadScreen() {
           style={styles.input}
         />
 
-        <Text style={styles.label}>오디오 파일 (m4a / mp3 / wav / webm)</Text>
+        <Text style={styles.label}>음성 파일 (.m4a)</Text>
         <Pressable onPress={pick} disabled={isWorking} style={styles.pickerBtn}>
           <Text style={styles.pickerBtnText}>{asset ? asset.name ?? '선택됨' : '파일 선택'}</Text>
         </Pressable>

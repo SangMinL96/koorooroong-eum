@@ -32,7 +32,12 @@ export class AskService {
       '자료에 없으면 "녹음 자료에서 해당 내용을 찾지 못했습니다."라고 답한다.',
       '추측하지 말고, 가능한 한 구체적으로 답한다.',
       '답변에 인용한 자료는 [자료 N] 형태로 본문에 표시한다.',
-    ].join(' ');
+      '',
+      '[출력 형식] — 반드시 GitHub Flavored Markdown 형식으로 작성한다.',
+      '- 강조는 `**굵게**`, 목록은 `-` 불렛, 인용/식별자는 백틱(`` ` ``)을 사용한다.',
+      '- 답변이 여러 항목으로 나뉘면 적절히 헤더(`##`/`###`) 또는 불렛으로 구조화한다.',
+      '- 답변 전체를 코드 블록 펜스(```) 로 감싸지 않는다 — 마크다운 문서 본문 자체를 출력한다.',
+    ].join('\n');
 
     const userPrompt = `[녹음 자료]\n${contextBlock}\n\n[질문]\n${question}`;
     const answer = (await this.llm.generateAnswer(systemPrompt, userPrompt)).trim();

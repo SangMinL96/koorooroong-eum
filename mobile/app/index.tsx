@@ -31,7 +31,7 @@ export default function Home() {
           <Pressable style={styles.actionPrimary}><Text style={styles.actionPrimaryText}>업로드</Text></Pressable>
         </Link>
         <Link href="/search" asChild>
-          <Pressable style={styles.actionSecondary}><Text style={styles.actionSecondaryText}>검색</Text></Pressable>
+          <Pressable style={styles.actionSecondary}><Text style={styles.actionSecondaryText}>녹음 찾기</Text></Pressable>
         </Link>
       </View>
 

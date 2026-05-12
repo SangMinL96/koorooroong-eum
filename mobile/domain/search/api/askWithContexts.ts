@@ -1,4 +1,4 @@
-import type { AskBody, AskContext, AskResponse } from '@koorooroong-eum/shared-types';
+import type { AskBody, AskContext, AskResponse } from '@/lib/types';
 import { apiPostJson } from '@/lib/api';
 
 export async function askWithContexts(question: string, contexts: AskContext[]): Promise<AskResponse> {

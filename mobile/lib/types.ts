@@ -56,19 +56,14 @@ export interface AskResponse {
 
 /** POST /summarize — 단일 녹취 전사 텍스트를 Gemini로 요약한다. */
 export interface SummarizeBody {
-  /** 요약 대상 전사 텍스트 (전체 transcript) */
   text: string;
-  /** 결과 표시용 녹음 이름. 프롬프트 컨텍스트로도 활용. */
   recordingName?: string;
 }
 
 /** Google Search Grounding으로 모델이 인용한 외부 출처. */
 export interface GroundingSource {
-  /** 인용된 페이지 URL */
   uri: string;
-  /** 페이지 제목 (있으면) */
   title?: string;
-  /** 페이지 도메인 (있으면) */
   domain?: string;
 }
 

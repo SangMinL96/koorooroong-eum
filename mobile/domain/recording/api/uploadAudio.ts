@@ -1,4 +1,4 @@
-import type { EmbedBody, EmbedResponse, SttResponse } from '@koorooroong-eum/shared-types';
+import type { EmbedBody, EmbedResponse, SttResponse } from '@/lib/types';
 import { apiPostJson, apiPostMultipart } from '@/lib/api';
 import { writeRecording } from '../store/fileStore';
 import type { RecordingChunk, RecordingFile } from '../types';

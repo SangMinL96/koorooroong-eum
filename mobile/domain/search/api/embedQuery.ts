@@ -1,4 +1,4 @@
-import type { EmbedBody, EmbedResponse } from '@koorooroong-eum/shared-types';
+import type { EmbedBody, EmbedResponse } from '@/lib/types';
 import { apiPostJson } from '@/lib/api';
 
 export async function embedQuery(query: string): Promise<number[]> {
