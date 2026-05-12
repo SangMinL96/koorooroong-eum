@@ -24,7 +24,8 @@ export class LlmService implements OnModuleInit {
   constructor(private readonly logger: LoggerService) {}
 
   onModuleInit() {
-    const apiKey = process.env.GEMINI_API_KEY;
+    const keyArr = process.env.GEMINI_API_KEY?.split('::');
+    const apiKey = keyArr?.[Math.floor(Math.random() * keyArr.length)];
     if (!apiKey) {
       this.logger.warn('GEMINI_API_KEY 미설정 — LlmService 호출 시 에러가 발생합니다.');
       return;

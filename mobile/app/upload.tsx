@@ -7,6 +7,7 @@ import { useSWRConfig } from 'swr';
 import { uploadAudio } from '@/domain/recording/api/uploadAudio';
 import { recordingsKeys } from '@/domain/recording/hooks/useRecordings';
 import { useRecordingsStore } from '@/domain/recording/store/useRecordingsStore';
+import { colors, radius, spacing, typography } from '@/lib/theme';
 
 const STAGE_LABEL: Record<'idle' | 'stt' | 'embed' | 'saving', string> = {
   idle: '',
@@ -104,17 +105,37 @@ export default function UploadScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  body: { padding: 16, gap: 8 },
-  label: { fontSize: 13, color: '#444', marginTop: 8 },
-  input: { borderWidth: 1, borderColor: '#ddd', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16 },
-  pickerBtn: { borderWidth: 1, borderColor: '#ddd', borderRadius: 10, padding: 14, alignItems: 'center' },
-  pickerBtnText: { fontSize: 15 },
-  meta: { fontSize: 12, color: '#666' },
-  progressBlock: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 16 },
-  progressText: { fontSize: 13, color: '#444' },
-  footer: { padding: 16 },
-  submit: { backgroundColor: '#111', paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
+  container: { flex: 1, backgroundColor: colors.bg },
+  body: { padding: spacing.lg, gap: spacing.sm },
+  label: { ...typography.label, color: colors.text, marginTop: spacing.sm },
+  input: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    ...typography.bodyLg,
+    color: colors.text,
+  },
+  pickerBtn: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    padding: spacing.lg,
+    alignItems: 'center',
+    backgroundColor: colors.bg,
+  },
+  pickerBtnText: { ...typography.body, color: colors.text },
+  meta: { ...typography.caption, color: colors.textSecondary },
+  progressBlock: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: spacing.lg },
+  progressText: { ...typography.bodySm, color: colors.textSecondary },
+  footer: { padding: spacing.lg },
+  submit: {
+    backgroundColor: colors.brand,
+    paddingVertical: spacing.lg,
+    borderRadius: radius.md,
+    alignItems: 'center',
+  },
   submitDisabled: { opacity: 0.4 },
-  submitText: { color: '#fff', fontWeight: '600', fontSize: 16 },
+  submitText: { color: colors.onBrand, ...typography.button },
 });

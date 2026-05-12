@@ -1,6 +1,6 @@
 import type { EmbedBody, EmbedResponse, SttResponse } from '@/lib/types';
 import { apiPostJson, apiPostMultipart } from '@/lib/api';
-import { writeRecording } from '../store/fileStore';
+import { appendToRecording, writeRecording } from '../store/fileStore';
 import type { RecordingChunk, RecordingFile } from '../types';
 
 type UploadInput = {
@@ -71,4 +71,44 @@ export async function uploadAudio(
   };
   await writeRecording(rec);
   return rec;
+}
+
+/**
+ * 기존 녹음에 새 음성을 이어붙여 STT/임베딩 후 append 한다.
+ * - 새로 녹음한 m4a 한 건만 서버에 전송 (전체 재처리 X — 속도/비용 절감)
+ * - 결과는 기존 녹음의 transcript/chunks 뒤에 그대로 이어붙음
+ * - 본문이 바뀌므로 캐시된 요약은 무효화됨 (사용자가 "다시 요약하기"로 갱신)
+ */
+export async function appendAudio(
+  existingId: string,
+  asset: { uri: string; mimeType?: string | null; name?: string | null },
+  onStage?: (s: Stage) => void,
+): Promise<RecordingFile> {
+  onStage?.('stt');
+
+  const formData = new FormData();
+  formData.append(
+    'file',
+    {
+      uri: asset.uri,
+      name: asset.name ?? 'recording.m4a',
+      type: asset.mimeType ?? 'audio/m4a',
+    } as unknown as Blob,
+  );
+
+  const stt = await apiPostMultipart<SttResponse>('/stt', formData);
+
+  onStage?.('embed');
+  const embed = await apiPostJson<EmbedResponse>('/embed', { texts: stt.chunks } satisfies EmbedBody);
+
+  if (embed.vectors.length !== stt.chunks.length) {
+    throw new Error('embed_count_mismatch');
+  }
+
+  onStage?.('saving');
+  const updated = await appendToRecording(existingId, stt.transcript, stt.chunks, embed.vectors);
+  if (!updated) {
+    throw new Error('recording_not_found');
+  }
+  return updated;
 }

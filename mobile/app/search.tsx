@@ -4,6 +4,7 @@ import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, Text
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { embedQuery } from '@/domain/search/api/embedQuery';
 import { searchRecordings, type RecordingHit, type Relevance } from '@/domain/search/search';
+import { colors, radius, spacing, typography } from '@/lib/theme';
 
 const TOP_N = 10;
 
@@ -23,9 +24,9 @@ const RELEVANCE_LABEL: Record<Relevance, string> = {
 };
 
 const RELEVANCE_COLOR: Record<Relevance, string> = {
-  high: '#1f8a4c',
-  medium: '#3367d6',
-  low: '#888',
+  high: colors.success,
+  medium: colors.brand,
+  low: colors.textTertiary,
 };
 
 export default function SearchScreen() {
@@ -121,25 +122,46 @@ export default function SearchScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  inputRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingTop: 16 },
-  input: { flex: 1, borderWidth: 1, borderColor: '#ddd', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 16 },
-  btn: { backgroundColor: '#111', paddingHorizontal: 16, justifyContent: 'center', borderRadius: 10 },
+  container: { flex: 1, backgroundColor: colors.bg },
+  inputRow: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingTop: spacing.lg },
+  input: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    ...typography.bodyLg,
+    color: colors.text,
+  },
+  btn: {
+    backgroundColor: colors.brand,
+    paddingHorizontal: spacing.lg,
+    justifyContent: 'center',
+    borderRadius: radius.md,
+  },
   btnDisabled: { opacity: 0.4 },
-  btnText: { color: '#fff', fontWeight: '600' },
-  hint: { fontSize: 12, color: '#666', paddingHorizontal: 16, paddingTop: 8 },
-  progressBlock: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 16 },
-  progressText: { fontSize: 13, color: '#444' },
+  btnText: { color: colors.onBrand, ...typography.button },
+  hint: { ...typography.caption, color: colors.textSecondary, paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
+  progressBlock: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.lg },
+  progressText: { ...typography.bodySm, color: colors.textSecondary },
   scroll: { flex: 1 },
-  scrollContent: { padding: 16, gap: 10 },
-  card: { padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#eee', backgroundColor: '#fafafa', gap: 6 },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  cardTitle: { flex: 1, fontSize: 15, fontWeight: '700' },
-  relevanceChip: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999, borderWidth: 1 },
+  scrollContent: { padding: spacing.lg, gap: spacing.md },
+  card: {
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    gap: spacing.sm,
+  },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
+  cardTitle: { flex: 1, ...typography.h3, color: colors.text },
+  relevanceChip: { paddingHorizontal: spacing.sm, paddingVertical: 2, borderRadius: radius.pill, borderWidth: 1 },
   relevanceText: { fontSize: 11, fontWeight: '700' },
-  cardSnippet: { fontSize: 13, lineHeight: 19, color: '#333' },
-  cardMeta: { fontSize: 11, color: '#888' },
-  empty: { alignItems: 'center', paddingVertical: 60, gap: 8 },
-  emptyTitle: { fontSize: 16, fontWeight: '600' },
-  emptySubtitle: { fontSize: 13, color: '#666' },
+  cardSnippet: { ...typography.bodySm, color: colors.text },
+  cardMeta: { ...typography.caption, color: colors.textTertiary },
+  empty: { alignItems: 'center', paddingVertical: 60, gap: spacing.sm },
+  emptyTitle: { ...typography.h2, color: colors.text },
+  emptySubtitle: { ...typography.bodySm, color: colors.textSecondary },
 });

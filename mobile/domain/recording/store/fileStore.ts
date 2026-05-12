@@ -1,6 +1,6 @@
 import * as FileSystem from 'expo-file-system';
 import type { GroundingSource } from '@/lib/types';
-import type { RecordingFile, RecordingIndex, RecordingMeta } from '../types';
+import type { RecordingChunk, RecordingFile, RecordingIndex, RecordingMeta } from '../types';
 
 const baseDir = () => `${FileSystem.documentDirectory}recordings/`;
 const indexPath = () => `${FileSystem.documentDirectory}index.json`;
@@ -74,6 +74,41 @@ export async function updateRecordingSummary(
     summarySources: sources && sources.length > 0 ? sources : undefined,
   };
   await FileSystem.writeAsStringAsync(recordingPath(id), JSON.stringify(next));
+  return next;
+}
+
+/**
+ * 기존 녹음 뒤에 새 청크와 transcript를 이어붙인다.
+ * - transcript: 단순 문자열 append (구분자: 빈 줄)
+ * - chunks: 기존 마지막 인덱스 다음부터 이어붙임
+ * - summary/summarySources: 본문이 바뀌었으니 무효화 (사용자가 "다시 요약하기" 할 때 갱신)
+ */
+export async function appendToRecording(
+  id: string,
+  newTranscript: string,
+  newChunkTexts: string[],
+  newEmbeddings: number[][],
+): Promise<RecordingFile | null> {
+  const rec = await readRecording(id);
+  if (!rec) return null;
+  if (newChunkTexts.length !== newEmbeddings.length) {
+    throw new Error('append_embed_count_mismatch');
+  }
+  const startIndex = rec.chunks.length;
+  const appended: RecordingChunk[] = newChunkTexts.map((text, i) => ({
+    index: startIndex + i,
+    text,
+    embedding: newEmbeddings[i],
+  }));
+  const next: RecordingFile = {
+    ...rec,
+    transcript: rec.transcript ? `${rec.transcript}\n\n${newTranscript}` : newTranscript,
+    chunks: [...rec.chunks, ...appended],
+    summary: undefined,
+    summaryAt: undefined,
+    summarySources: undefined,
+  };
+  await writeRecording(next);
   return next;
 }
 

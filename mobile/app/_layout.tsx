@@ -6,6 +6,7 @@ export default function RootLayout() {
     <>
       <Stack>
         <Stack.Screen name="index" options={{ title: '꾸루룽음' }} />
+        <Stack.Screen name="record" options={{ title: '녹음하기' }} />
         <Stack.Screen name="upload" options={{ title: '업로드' }} />
         <Stack.Screen name="search" options={{ title: '녹음 찾기' }} />
         <Stack.Screen name="recordings/[id]" options={{ title: '녹음' }} />

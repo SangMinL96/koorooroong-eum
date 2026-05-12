@@ -11,6 +11,7 @@ import { embedQuery } from '@/domain/search/api/embedQuery';
 import { summarizeText } from '@/domain/search/api/summarize';
 import { searchTopK } from '@/domain/search/search';
 import type { AskResponse } from '@/lib/types';
+import { colors, radius, spacing, typography } from '@/lib/theme';
 
 const TOP_K = 5;
 const TRANSCRIPT_COLLAPSED_LINES = 6;
@@ -59,6 +60,7 @@ function SummaryLoadingPlaceholder() {
     let cancelled = false;
     let holdTimer: ReturnType<typeof setTimeout> | null = null;
 
+    // 색상 토큰을 직접 import해서 컴포넌트 안에서도 일관 색 사용
     Animated.timing(opacity, { toValue: 1, duration: 450, useNativeDriver: true }).start(() => {
       if (cancelled) return;
       holdTimer = setTimeout(() => {
@@ -79,7 +81,7 @@ function SummaryLoadingPlaceholder() {
 
   return (
     <View style={styles.summaryLoading}>
-      <ActivityIndicator size="small" color="#3367d6" />
+      <ActivityIndicator size="small" color={colors.brand} />
       <Animated.Text style={[styles.summaryLoadingText, { opacity }]}>{phrases[idx]}</Animated.Text>
     </View>
   );
@@ -228,13 +230,22 @@ export default function RecordingDetail() {
             <Text style={styles.searchBtnText}>검색</Text>
           </Pressable>
         </View>
-        <Pressable
-          onPress={onSummarize}
-          disabled={summarizing}
-          style={[styles.summarizeBtn, summarizing && styles.btnDisabled]}
-        >
-          {summarizing ? <ActivityIndicator color="#fff" /> : <Text style={styles.summarizeBtnText}>{summarizeLabel}</Text>}
-        </Pressable>
+        <View style={styles.actionRow}>
+          <Pressable
+            onPress={onSummarize}
+            disabled={summarizing}
+            style={[styles.summarizeBtn, summarizing && styles.btnDisabled]}
+          >
+            {summarizing ? <ActivityIndicator color={colors.onBrand} /> : <Text style={styles.summarizeBtnText}>{summarizeLabel}</Text>}
+          </Pressable>
+          <Pressable
+            onPress={() => router.push({ pathname: '/record', params: { appendTo: data.id } })}
+            disabled={summarizing}
+            style={[styles.appendBtn, summarizing && styles.btnDisabled]}
+          >
+            <Text style={styles.appendBtnText}>이어서 녹음</Text>
+          </Pressable>
+        </View>
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
@@ -326,62 +337,139 @@ export default function RecordingDetail() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 16, borderBottomWidth: 1, borderBottomColor: '#eee' },
-  title: { fontSize: 18, fontWeight: '700' },
-  meta: { fontSize: 12, color: '#666', marginTop: 2 },
-  deleteBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: '#e53935' },
-  deleteText: { color: '#e53935', fontWeight: '600' },
-  toolbar: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, gap: 8, borderBottomWidth: 1, borderBottomColor: '#f1f1f3' },
-  searchRow: { flexDirection: 'row', gap: 8 },
-  searchInput: { flex: 1, borderWidth: 1, borderColor: '#ddd', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, fontSize: 15 },
-  searchBtn: { backgroundColor: '#111', paddingHorizontal: 16, justifyContent: 'center', borderRadius: 10 },
-  searchBtnText: { color: '#fff', fontWeight: '600' },
-  summarizeBtn: { backgroundColor: '#3367d6', paddingVertical: 10, borderRadius: 10, alignItems: 'center' },
-  summarizeBtnText: { color: '#fff', fontWeight: '600' },
+  container: { flex: 1, backgroundColor: colors.bg },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    padding: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  title: { ...typography.h1, color: colors.text },
+  meta: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },
+  deleteBtn: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.danger,
+  },
+  deleteText: { color: colors.danger, ...typography.label },
+  toolbar: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
+    gap: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  searchRow: { flexDirection: 'row', gap: spacing.sm },
+  searchInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    ...typography.body,
+    color: colors.text,
+  },
+  searchBtn: {
+    backgroundColor: colors.text,
+    paddingHorizontal: spacing.lg,
+    justifyContent: 'center',
+    borderRadius: radius.md,
+  },
+  searchBtnText: { color: colors.textInverse, ...typography.button },
+  actionRow: { flexDirection: 'row', gap: spacing.sm },
+  summarizeBtn: {
+    flex: 1,
+    backgroundColor: colors.brand,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
+    alignItems: 'center',
+  },
+  summarizeBtnText: { color: colors.onBrand, ...typography.button },
+  appendBtn: {
+    flex: 1,
+    backgroundColor: colors.bg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
+    alignItems: 'center',
+  },
+  appendBtnText: { color: colors.text, ...typography.button },
   btnDisabled: { opacity: 0.4 },
   scroll: { flex: 1 },
-  scrollContent: { padding: 16, gap: 12 },
-  progressBlock: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  progressText: { fontSize: 13, color: '#444' },
-  resultBlock: { padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#e6e8ef', backgroundColor: '#f7f9ff', gap: 6 },
-  sectionLabel: { fontSize: 13, color: '#666', fontWeight: '600' },
-  resultBody: { fontSize: 15, lineHeight: 22, color: '#111' },
-  sourceList: { marginTop: 4, gap: 2 },
-  sourceLine: { fontSize: 12, color: '#666' },
+  scrollContent: { padding: spacing.lg, gap: spacing.md },
+  progressBlock: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  progressText: { ...typography.bodySm, color: colors.textSecondary },
+  resultBlock: {
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    gap: spacing.sm,
+  },
+  sectionLabel: { ...typography.label, color: colors.textSecondary },
+  resultBody: { ...typography.bodyLg, color: colors.text },
+  sourceList: { marginTop: spacing.xs, gap: 2 },
+  sourceLine: { ...typography.caption, color: colors.textSecondary },
   summaryHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  summaryMeta: { fontSize: 11, color: '#888' },
-  summaryLoading: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, minHeight: 40 },
-  summaryLoadingText: { flex: 1, fontSize: 14, color: '#3367d6', fontWeight: '600' },
-  sourcesBlock: { marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#e6e8ef', gap: 6 },
-  sourcesTitle: { fontSize: 12, fontWeight: '700', color: '#555' },
-  sourceItem: { paddingVertical: 4 },
-  sourceItemTitle: { fontSize: 13, color: '#3367d6', fontWeight: '600' },
-  sourceItemUri: { fontSize: 11, color: '#888' },
+  summaryMeta: { fontSize: 11, color: colors.textTertiary },
+  summaryLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.md,
+    minHeight: 40,
+  },
+  summaryLoadingText: { flex: 1, ...typography.label, color: colors.brand },
+  sourcesBlock: {
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    gap: spacing.sm,
+  },
+  sourcesTitle: { fontSize: 12, fontWeight: '700', color: colors.textSecondary },
+  sourceItem: { paddingVertical: spacing.xs },
+  sourceItemTitle: { ...typography.bodySm, color: colors.textLink, fontWeight: '600' },
+  sourceItemUri: { fontSize: 11, color: colors.textTertiary },
   transcriptHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  toggleText: { fontSize: 13, color: '#3367d6', fontWeight: '600' },
-  transcript: { fontSize: 15, lineHeight: 24, color: '#111' },
-  toggleBtn: { alignSelf: 'center', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: '#ddd' },
-  toggleBtnText: { fontSize: 13, color: '#333', fontWeight: '600' },
+  toggleText: { ...typography.bodySm, color: colors.textLink, fontWeight: '600' },
+  transcript: { ...typography.bodyLg, lineHeight: 24, color: colors.text },
+  toggleBtn: {
+    alignSelf: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  toggleBtnText: { ...typography.bodySm, color: colors.text, fontWeight: '600' },
 });
 
 const markdownStyles = StyleSheet.create({
-  body: { fontSize: 15, lineHeight: 22, color: '#111' },
-  heading1: { fontSize: 19, fontWeight: '700', marginTop: 8, marginBottom: 6, color: '#111' },
-  heading2: { fontSize: 17, fontWeight: '700', marginTop: 10, marginBottom: 4, color: '#111' },
-  heading3: { fontSize: 15, fontWeight: '700', marginTop: 8, marginBottom: 2, color: '#222' },
+  body: { ...typography.bodyLg, color: colors.text },
+  heading1: { fontSize: 22, fontWeight: '800', marginTop: spacing.md, marginBottom: spacing.sm, color: colors.text, letterSpacing: -0.3 },
+  heading2: { fontSize: 18, fontWeight: '800', marginTop: spacing.md, marginBottom: spacing.xs, color: colors.text, letterSpacing: -0.2 },
+  heading3: { fontSize: 16, fontWeight: '700', marginTop: spacing.sm, marginBottom: 2, color: colors.text },
   strong: { fontWeight: '700' },
   em: { fontStyle: 'italic' },
   bullet_list: { marginVertical: 2 },
   ordered_list: { marginVertical: 2 },
   list_item: { marginVertical: 1 },
-  bullet_list_icon: { marginRight: 6, color: '#3367d6' },
-  code_inline: { backgroundColor: '#eef1f7', color: '#1f3a8a', paddingHorizontal: 4, borderRadius: 4, fontSize: 13 },
-  code_block: { backgroundColor: '#0f172a', color: '#e2e8f0', padding: 10, borderRadius: 8, fontSize: 13 },
-  fence: { backgroundColor: '#0f172a', color: '#e2e8f0', padding: 10, borderRadius: 8, fontSize: 13 },
-  blockquote: { backgroundColor: '#eef2ff', borderLeftWidth: 3, borderLeftColor: '#3367d6', paddingHorizontal: 10, paddingVertical: 6, marginVertical: 4 },
-  link: { color: '#3367d6', textDecorationLine: 'underline' },
-  hr: { backgroundColor: '#e6e8ef', height: 1, marginVertical: 8 },
-  paragraph: { marginTop: 2, marginBottom: 6 },
+  bullet_list_icon: { marginRight: spacing.sm, color: colors.brand },
+  code_inline: { backgroundColor: colors.surfaceAlt, color: colors.text, paddingHorizontal: spacing.xs, borderRadius: radius.sm, fontSize: 13 },
+  code_block: { backgroundColor: colors.bgInverse, color: colors.textInverse, padding: spacing.md, borderRadius: radius.md, fontSize: 13 },
+  fence: { backgroundColor: colors.bgInverse, color: colors.textInverse, padding: spacing.md, borderRadius: radius.md, fontSize: 13 },
+  blockquote: { backgroundColor: colors.brandSubtle, borderLeftWidth: 3, borderLeftColor: colors.brand, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, marginVertical: spacing.xs },
+  link: { color: colors.textLink, textDecorationLine: 'underline' },
+  hr: { backgroundColor: colors.border, height: 1, marginVertical: spacing.sm },
+  paragraph: { marginTop: 2, marginBottom: spacing.sm },
 });
