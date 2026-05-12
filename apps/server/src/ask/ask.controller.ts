@@ -4,6 +4,7 @@ import {
   Controller,
   HttpException,
   Post,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import type { AskBody, AskResponse } from '@koorooroong-eum/shared-types';
 import { AskService } from './ask.service';
@@ -27,6 +28,12 @@ export class AskController {
       return { ok: true, data };
     } catch (err) {
       if (err instanceof HttpException) throw err;
+      const msg = err instanceof Error ? err.message : String(err);
+      if (/UNAVAILABLE|503|500|INTERNAL|429|RESOURCE_EXHAUSTED|deadline/i.test(msg)) {
+        throw new ServiceUnavailableException(
+          'Gemini가 일시적으로 과부하 상태입니다. 잠시 후 다시 시도해주세요.',
+        );
+      }
       throw err;
     }
   }
