@@ -37,9 +37,8 @@ export default function RecordScreen() {
   const { appendTo } = useLocalSearchParams<{ appendTo?: string }>();
   const isAppendMode = typeof appendTo === 'string' && appendTo.length > 0;
   const { mutate: globalMutate } = useSWRConfig();
-  const stage = useRecordingsStore((s) => s.uploadStage);
-  const setStage = useRecordingsStore((s) => s.setUploadStage);
-  const isUploading = stage !== 'idle';
+  const activeJob = useRecordingsStore((s) => s.activeJob);
+  const isUploading = activeJob !== null;
 
   const [permission, setPermission] = useState<boolean | null>(null);
   const [phase, setPhase] = useState<Phase>('idle');
@@ -193,35 +192,52 @@ export default function RecordScreen() {
     setPhase('idle');
   };
 
-  const submit = async () => {
+  const startJob = useRecordingsStore((s) => s.startJob);
+  const updateJobStage = useRecordingsStore((s) => s.updateJobStage);
+  const clearJob = useRecordingsStore((s) => s.clearJob);
+
+  const submit = () => {
     if (!recordedUri) return;
-    try {
-      if (isAppendMode && appendTo) {
-        await appendAudio(
-          appendTo,
-          { uri: recordedUri, name: 'recording.m4a', mimeType: 'audio/m4a' },
-          (s) => setStage(s),
-        );
-        globalMutate(recordingsKeys.list);
-        globalMutate(recordingsKeys.byId(appendTo));
-        router.replace({ pathname: '/recordings/[id]', params: { id: appendTo } });
-      } else {
-        await uploadAudio(
-          {
-            name: name.trim() || defaultRecordingName(),
-            asset: { uri: recordedUri, name: 'recording.m4a', mimeType: 'audio/m4a' },
-          },
-          (s) => setStage(s),
-        );
-        globalMutate(recordingsKeys.list);
-        router.replace('/');
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      Alert.alert(isAppendMode ? '이어 녹음 저장 실패' : '업로드 실패', msg);
-    } finally {
-      setStage('idle');
+    const jobName = isAppendMode && appendTo ? '이어 녹음' : name.trim() || defaultRecordingName();
+
+    // 1) 글로벌 작업 시작 등록 (화면 떠나도 진행률 유지)
+    startJob({ name: jobName, appendTo, stage: 'stt' });
+
+    // 2) 사용자는 즉시 홈/디테일로 복귀 — 처리는 백그라운드 promise 로 계속
+    if (isAppendMode && appendTo) {
+      router.replace({ pathname: '/recordings/[id]', params: { id: appendTo } });
+    } else {
+      router.replace('/');
     }
+
+    // 3) 백그라운드 promise — 결과는 globalMutate 로 SWR 캐시에 반영
+    (async () => {
+      try {
+        if (isAppendMode && appendTo) {
+          await appendAudio(
+            appendTo,
+            { uri: recordedUri, name: 'recording.m4a', mimeType: 'audio/m4a' },
+            (s) => updateJobStage(s),
+          );
+          globalMutate(recordingsKeys.list);
+          globalMutate(recordingsKeys.byId(appendTo));
+        } else {
+          await uploadAudio(
+            {
+              name: jobName,
+              asset: { uri: recordedUri, name: 'recording.m4a', mimeType: 'audio/m4a' },
+            },
+            (s) => updateJobStage(s),
+          );
+          globalMutate(recordingsKeys.list);
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        Alert.alert(isAppendMode ? '이어 녹음 저장 실패' : '업로드 실패', msg);
+      } finally {
+        clearJob();
+      }
+    })();
   };
 
   const isRecording = phase === 'recording';
@@ -229,7 +245,7 @@ export default function RecordScreen() {
   const canSubmit = isRecorded && recordedUri !== null && elapsed > 0;
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <SafeAreaView style={styles.container} edges={['bottom', 'left', 'right']}>
       <View style={styles.body}>
         {isAppendMode ? (
           <View style={styles.appendBanner}>
@@ -292,7 +308,7 @@ export default function RecordScreen() {
         {isUploading ? (
           <View style={styles.progressBlock}>
             <ActivityIndicator />
-            <Text style={styles.progressText}>{STAGE_LABEL[stage]}</Text>
+            <Text style={styles.progressText}>{activeJob ? STAGE_LABEL[activeJob.stage] : ''}</Text>
           </View>
         ) : null}
       </View>

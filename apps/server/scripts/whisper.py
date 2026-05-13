@@ -17,6 +17,8 @@ NestJS 등에서 subprocess 로 호출하는 faster-whisper 전사 CLI.
   ROOM_WHISPER_COMPUTE_TYPE   기본 int8  (cuda 예: float16)
   ROOM_WHISPER_LANGUAGE       기본 ko    (비우면 자동 감지)
   ROOM_WHISPER_SITE_PACKAGES  site-packages 절대경로 (venv 밖에서 실행할 때)
+  ROOM_WHISPER_BEAM_SIZE      기본 1     (1=greedy, 5=정확도↑/속도↓. 회의 한국어는 1로도 충분)
+  ROOM_WHISPER_VAD_FILTER     기본 true  (false 면 무음 필터 끔. true 인데 전부 무음으로 걸러지면 자동 폴백)
 """
 from __future__ import annotations
 
@@ -77,9 +79,25 @@ def main() -> None:
     lang_raw = os.environ.get("ROOM_WHISPER_LANGUAGE", "ko").strip()
     language = lang_raw if lang_raw else None
 
+    beam_raw = os.environ.get("ROOM_WHISPER_BEAM_SIZE", "1").strip() or "1"
+    try:
+        beam_size = max(1, int(beam_raw))
+    except ValueError:
+        beam_size = 1
+
+    vad_raw = os.environ.get("ROOM_WHISPER_VAD_FILTER", "true").strip().lower()
+    vad_filter_default = vad_raw not in ("0", "false", "no", "off")
+
     print(
         json.dumps(
-            {"stage": "load_model", "model": model_name, "device": device, "compute_type": compute_type},
+            {
+                "stage": "load_model",
+                "model": model_name,
+                "device": device,
+                "compute_type": compute_type,
+                "beam_size": beam_size,
+                "vad_filter": vad_filter_default,
+            },
             ensure_ascii=False,
         ),
         file=sys.stderr,
@@ -88,19 +106,35 @@ def main() -> None:
 
     model = WhisperModel(model_name, device=device, compute_type=compute_type)
 
-    # 짧은 클립은 기본 VAD 가 전부 무음으로 걸러 빈 전사가 되는 경우가 있어 끈다.
-    segments, _info = model.transcribe(
-        audio_path,
-        language=language,
-        beam_size=5,
-        vad_filter=False,
-    )
+    def _do_transcribe(use_vad: bool):
+        return model.transcribe(
+            audio_path,
+            language=language,
+            beam_size=beam_size,
+            vad_filter=use_vad,
+            # 무음 0.5s 이상만 잘라낸다. 짧은 무음은 유지 — 한국어 띄어말하기에서 의미 손실 방지.
+            vad_parameters=dict(min_silence_duration_ms=500) if use_vad else None,
+        )
 
+    segments, _info = _do_transcribe(vad_filter_default)
     parts: list[str] = []
     for seg in segments:
         t = seg.text.strip()
         if t:
             parts.append(t)
+
+    # VAD 가 켜진 채로 전부 무음으로 걸러져 빈 전사가 됐으면, VAD 끄고 한 번 더 시도 (짧은 클립 보호).
+    if vad_filter_default and not parts:
+        print(
+            json.dumps({"stage": "retry_no_vad", "reason": "empty_with_vad"}, ensure_ascii=False),
+            file=sys.stderr,
+            flush=True,
+        )
+        segments, _info = _do_transcribe(False)
+        for seg in segments:
+            t = seg.text.strip()
+            if t:
+                parts.append(t)
 
     text = " ".join(parts).strip()
     _emit_result({"text": text})

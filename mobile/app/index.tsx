@@ -1,10 +1,17 @@
 import { Link, useFocusEffect } from 'expo-router';
 import { useCallback } from 'react';
-import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSWRConfig } from 'swr';
 import { recordingsKeys, useRecordings } from '@/domain/recording/hooks/useRecordings';
+import { useRecordingsStore } from '@/domain/recording/store/useRecordingsStore';
 import { colors, radius, spacing, typography } from '@/lib/theme';
+
+const STAGE_LABEL: Record<'stt' | 'embed' | 'saving', string> = {
+  stt: '음성을 텍스트로 변환 중...',
+  embed: '임베딩 생성 중...',
+  saving: '저장 중...',
+};
 
 function formatDate(iso: string): string {
   try {
@@ -18,6 +25,7 @@ function formatDate(iso: string): string {
 export default function Home() {
   const { data, isLoading, mutate } = useRecordings();
   const { mutate: globalMutate } = useSWRConfig();
+  const activeJob = useRecordingsStore((s) => s.activeJob);
 
   useFocusEffect(
     useCallback(() => {
@@ -26,7 +34,7 @@ export default function Home() {
   );
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <SafeAreaView style={styles.container} edges={['bottom', 'left', 'right']}>
       <View style={styles.header}>
         <Link href="/record" asChild>
           <Pressable style={styles.actionPrimary}><Text style={styles.actionPrimaryText}>녹음</Text></Pressable>
@@ -38,6 +46,18 @@ export default function Home() {
           <Pressable style={styles.actionSecondary}><Text style={styles.actionSecondaryText}>찾기</Text></Pressable>
         </Link>
       </View>
+
+      {activeJob ? (
+        <View style={styles.jobBanner}>
+          <ActivityIndicator size="small" color={colors.brand} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.jobBannerTitle} numberOfLines={1}>
+              {activeJob.appendTo ? '이어 녹음 처리 중' : `"${activeJob.name}" 처리 중`}
+            </Text>
+            <Text style={styles.jobBannerSubtitle}>{STAGE_LABEL[activeJob.stage]}</Text>
+          </View>
+        </View>
+      ) : null}
 
       <FlatList
         data={data ?? []}
@@ -84,6 +104,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   actionSecondaryText: { color: colors.text, ...typography.button },
+  jobBanner: {
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: colors.brandSubtle,
+    borderWidth: 1,
+    borderColor: colors.brand,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  jobBannerTitle: { ...typography.label, color: colors.text },
+  jobBannerSubtitle: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },
   listContent: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl2, gap: spacing.md },
   card: {
     padding: spacing.lg,

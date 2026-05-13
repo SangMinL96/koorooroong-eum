@@ -184,14 +184,14 @@ export default function RecordingDetail() {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.center} edges={['bottom']}>
+      <SafeAreaView style={styles.center} edges={['bottom', 'left', 'right']}>
         <ActivityIndicator />
       </SafeAreaView>
     );
   }
   if (!data) {
     return (
-      <SafeAreaView style={styles.center} edges={['bottom']}>
+      <SafeAreaView style={styles.center} edges={['bottom', 'left', 'right']}>
         <Text>녹음을 찾을 수 없습니다.</Text>
       </SafeAreaView>
     );
@@ -200,7 +200,7 @@ export default function RecordingDetail() {
   const summarizeLabel = cachedSummary ? '다시 요약하기' : 'Gemini 요약';
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <SafeAreaView style={styles.container} edges={['bottom', 'left', 'right']}>
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
           <Text style={styles.title} numberOfLines={1}>{data.name}</Text>

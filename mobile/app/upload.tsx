@@ -21,9 +21,11 @@ export default function UploadScreen() {
   const { mutate: globalMutate } = useSWRConfig();
   const [name, setName] = useState('');
   const [asset, setAsset] = useState<DocumentPicker.DocumentPickerAsset | null>(null);
-  const stage = useRecordingsStore((s) => s.uploadStage);
-  const setStage = useRecordingsStore((s) => s.setUploadStage);
-  const isWorking = stage !== 'idle';
+  const activeJob = useRecordingsStore((s) => s.activeJob);
+  const startJob = useRecordingsStore((s) => s.startJob);
+  const updateJobStage = useRecordingsStore((s) => s.updateJobStage);
+  const clearJob = useRecordingsStore((s) => s.clearJob);
+  const isWorking = activeJob !== null;
 
   const pick = async () => {
     const res = await DocumentPicker.getDocumentAsync({
@@ -48,29 +50,38 @@ export default function UploadScreen() {
     }
   };
 
-  const submit = async () => {
+  const submit = () => {
     if (!asset) {
       Alert.alert('파일을 선택해주세요.');
       return;
     }
-    try {
-      setStage('stt');
-      await uploadAudio(
-        { name: name.trim() || asset.name || 'untitled', asset: { uri: asset.uri, name: asset.name, mimeType: asset.mimeType } },
-        (s) => setStage(s),
-      );
-      globalMutate(recordingsKeys.list);
-      router.replace('/');
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      Alert.alert('업로드 실패', msg);
-    } finally {
-      setStage('idle');
-    }
+    const jobName = name.trim() || asset.name || 'untitled';
+
+    // 1) 글로벌 작업 등록 — 화면 떠나도 진행률 유지
+    startJob({ name: jobName, stage: 'stt' });
+
+    // 2) 사용자는 즉시 홈으로 복귀
+    router.replace('/');
+
+    // 3) 백그라운드 처리
+    (async () => {
+      try {
+        await uploadAudio(
+          { name: jobName, asset: { uri: asset.uri, name: asset.name, mimeType: asset.mimeType } },
+          (s) => updateJobStage(s),
+        );
+        globalMutate(recordingsKeys.list);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        Alert.alert('업로드 실패', msg);
+      } finally {
+        clearJob();
+      }
+    })();
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <SafeAreaView style={styles.container} edges={['bottom', 'left', 'right']}>
       <View style={styles.body}>
         <Text style={styles.label}>녹음 이름</Text>
         <TextInput
@@ -90,7 +101,7 @@ export default function UploadScreen() {
         {isWorking ? (
           <View style={styles.progressBlock}>
             <ActivityIndicator />
-            <Text style={styles.progressText}>{STAGE_LABEL[stage]}</Text>
+            <Text style={styles.progressText}>{activeJob ? STAGE_LABEL[activeJob.stage] : ''}</Text>
           </View>
         ) : null}
       </View>

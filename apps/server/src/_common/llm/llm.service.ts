@@ -12,8 +12,9 @@ export interface GroundedAnswer {
 export const EMBEDDING_MODEL = 'gemini-embedding-001';
 export const LLM_MODEL = 'gemini-2.5-flash';
 
-// 무료 티어 RPM 제약을 고려해 동시 5건으로 제한하고 429/일시 오류는 지수 백오프 재시도.
-const EMBED_CONCURRENCY = 5;
+// 임베딩은 batch 호출 + 동시성 병렬. RPM 제약 안에서 청크 수가 많아도 빠르게 처리.
+const EMBED_BATCH_SIZE = 50;       // gemini-embedding-001은 한 호출당 100까지 가능, 안전 마진 50
+const EMBED_CONCURRENCY = 5;        // batch 호출들을 동시 5건 병렬
 const EMBED_MAX_RETRIES = 5;
 const EMBED_BACKOFF_BASE_MS = 1000;
 
@@ -68,7 +69,9 @@ export class LlmService implements OnModuleInit {
 
   /**
    * 여러 텍스트를 임베딩한다. 입력 순서와 동일한 순서로 벡터 배열을 반환.
-   * batch size 1 제약 → 단건 호출을 동시성 제한으로 병렬 실행.
+   * - texts를 EMBED_BATCH_SIZE 단위로 슬라이스 → 각 슬라이스를 1회 호출로 batch 임베딩
+   * - batch 호출들은 EMBED_CONCURRENCY 만큼 병렬 실행
+   * - 일시 오류는 지수 백오프로 재시도, 매 attempt 마다 랜덤 키로 client 재선택
    */
   async embedTexts(texts: string[]): Promise<number[][]> {
     if (texts.length === 0) return [];
@@ -76,26 +79,36 @@ export class LlmService implements OnModuleInit {
 
     const total = texts.length;
     const startedAt = Date.now();
-    this.logger.log(`임베딩 시작 total=${total} concurrency=${EMBED_CONCURRENCY}`);
+
+    // 입력을 batch 슬라이스로 쪼개고, 각 슬라이스의 시작 인덱스를 기록 (결과 재배치용)
+    const slices: { start: number; texts: string[] }[] = [];
+    for (let i = 0; i < total; i += EMBED_BATCH_SIZE) {
+      slices.push({ start: i, texts: texts.slice(i, i + EMBED_BATCH_SIZE) });
+    }
+    this.logger.log(
+      `임베딩 시작 total=${total} batchSize=${EMBED_BATCH_SIZE} batches=${slices.length} concurrency=${EMBED_CONCURRENCY}`,
+    );
 
     const results: number[][] = new Array(total);
-    let nextIndex = 0;
-    let completed = 0;
+    let nextBatchIdx = 0;
+    let completedBatches = 0;
 
     const worker = async () => {
       for (;;) {
-        const i = nextIndex++;
-        if (i >= total) return;
-        results[i] = await this.embedOneWithRetry(texts[i], i);
-        completed++;
-        if (completed % 10 === 0 || completed === total) {
-          const elapsed = ((Date.now() - startedAt) / 1000).toFixed(1);
-          this.logger.log(`임베딩 진행 ${completed}/${total} (${elapsed}s)`);
+        const bi = nextBatchIdx++;
+        if (bi >= slices.length) return;
+        const { start, texts: batchTexts } = slices[bi];
+        const vectors = await this.embedBatchWithRetry(batchTexts, bi);
+        for (let j = 0; j < vectors.length; j++) {
+          results[start + j] = vectors[j];
         }
+        completedBatches++;
+        const elapsed = ((Date.now() - startedAt) / 1000).toFixed(1);
+        this.logger.log(`임베딩 batch ${completedBatches}/${slices.length} (+${batchTexts.length}) elapsed=${elapsed}s`);
       }
     };
 
-    await Promise.all(Array.from({ length: Math.min(EMBED_CONCURRENCY, total) }, () => worker()));
+    await Promise.all(Array.from({ length: Math.min(EMBED_CONCURRENCY, slices.length) }, () => worker()));
 
     const elapsed = ((Date.now() - startedAt) / 1000).toFixed(1);
     this.logger.log(`임베딩 완료 total=${total} elapsed=${elapsed}s`);
@@ -104,28 +117,32 @@ export class LlmService implements OnModuleInit {
 
   /** 단일 텍스트 임베딩 헬퍼. */
   async embedText(text: string): Promise<number[]> {
-    this.ensureClient();
-    return this.embedOneWithRetry(text, 0);
+    const [vec] = await this.embedBatchWithRetry([text], 0);
+    return vec;
   }
 
-  /** 단건 호출 + 429/일시 오류 지수 백오프. 매 attempt 마다 랜덤 키로 client 재선택. */
-  private async embedOneWithRetry(text: string, index: number): Promise<number[]> {
+  /** batch 임베딩 호출 + 일시 오류 지수 백오프. 매 attempt 마다 랜덤 키로 client 재선택. */
+  private async embedBatchWithRetry(batchTexts: string[], batchIdx: number): Promise<number[][]> {
     let lastErr: unknown;
     for (let attempt = 0; attempt < EMBED_MAX_RETRIES; attempt++) {
       const client = this.ensureClient();
       try {
         const res = await client.models.embedContent({
           model: EMBEDDING_MODEL,
-          contents: text,
+          contents: batchTexts,
         });
-        return res.embeddings?.[0]?.values ?? [];
+        const embeddings = res.embeddings ?? [];
+        if (embeddings.length !== batchTexts.length) {
+          throw new Error(`embed_count_mismatch expected=${batchTexts.length} got=${embeddings.length}`);
+        }
+        return embeddings.map((e) => e.values ?? []);
       } catch (err: unknown) {
         lastErr = err;
         const msg = err instanceof Error ? err.message : String(err);
         const retriable = /429|RESOURCE_EXHAUSTED|UNAVAILABLE|503|500|deadline/i.test(msg);
         if (!retriable || attempt === EMBED_MAX_RETRIES - 1) break;
         const wait = EMBED_BACKOFF_BASE_MS * 2 ** attempt + Math.floor(Math.random() * 250);
-        this.logger.warn(`임베딩 재시도 idx=${index} attempt=${attempt + 1} wait=${wait}ms reason=${msg}`);
+        this.logger.warn(`임베딩 batch 재시도 batch=${batchIdx} attempt=${attempt + 1} wait=${wait}ms reason=${msg.slice(0, 200)}`);
         await new Promise((r) => setTimeout(r, wait));
       }
     }
