@@ -71,11 +71,14 @@ export class LlmService implements OnModuleInit {
    * 여러 텍스트를 임베딩한다. 입력 순서와 동일한 순서로 벡터 배열을 반환.
    * - texts를 EMBED_BATCH_SIZE 단위로 슬라이스 → 각 슬라이스를 1회 호출로 batch 임베딩
    * - batch 호출들은 EMBED_CONCURRENCY 만큼 병렬 실행
-   * - 일시 오류는 지수 백오프로 재시도, 매 attempt 마다 랜덤 키로 client 재선택
+   * - **한 embedTexts 호출 안에서는 같은 API 키 사용** (요청 단위 키 일관성).
+   *   batch가 몇 개로 나뉘든, retry가 몇 번 일어나든 동일 client 재사용.
+   * - 일시 오류는 지수 백오프로 재시도.
    */
   async embedTexts(texts: string[]): Promise<number[][]> {
     if (texts.length === 0) return [];
-    this.ensureClient();
+    // 요청 시작 시점에 키 1개만 픽 — 이후 모든 batch/retry 가 같은 client 공유
+    const client = this.ensureClient();
 
     const total = texts.length;
     const startedAt = Date.now();
@@ -98,7 +101,7 @@ export class LlmService implements OnModuleInit {
         const bi = nextBatchIdx++;
         if (bi >= slices.length) return;
         const { start, texts: batchTexts } = slices[bi];
-        const vectors = await this.embedBatchWithRetry(batchTexts, bi);
+        const vectors = await this.embedBatchOnClient(client, batchTexts, bi);
         for (let j = 0; j < vectors.length; j++) {
           results[start + j] = vectors[j];
         }
@@ -115,17 +118,24 @@ export class LlmService implements OnModuleInit {
     return results;
   }
 
-  /** 단일 텍스트 임베딩 헬퍼. */
+  /** 단일 텍스트 임베딩 헬퍼. 요청 단위 키 일관성 유지. */
   async embedText(text: string): Promise<number[]> {
-    const [vec] = await this.embedBatchWithRetry([text], 0);
+    const client = this.ensureClient();
+    const [vec] = await this.embedBatchOnClient(client, [text], 0);
     return vec;
   }
 
-  /** batch 임베딩 호출 + 일시 오류 지수 백오프. 매 attempt 마다 랜덤 키로 client 재선택. */
-  private async embedBatchWithRetry(batchTexts: string[], batchIdx: number): Promise<number[][]> {
+  /**
+   * 지정된 client(== 지정된 API 키)로 batch 임베딩 호출 + 일시 오류 지수 백오프.
+   * 호출자가 한 요청 안에서 같은 client를 넘기면 키 일관성 보장.
+   */
+  private async embedBatchOnClient(
+    client: GoogleGenAI,
+    batchTexts: string[],
+    batchIdx: number,
+  ): Promise<number[][]> {
     let lastErr: unknown;
     for (let attempt = 0; attempt < EMBED_MAX_RETRIES; attempt++) {
-      const client = this.ensureClient();
       try {
         const res = await client.models.embedContent({
           model: EMBEDDING_MODEL,
@@ -149,12 +159,24 @@ export class LlmService implements OnModuleInit {
     throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
   }
 
-  /** 시스템 프롬프트 + 사용자 질문으로 답변 생성. 503/500/429 등 일시 오류는 지수 백오프로 재시도.
-   *  매 attempt 마다 랜덤 키로 client 재선택. */
+  /**
+   * 시스템 프롬프트 + 사용자 질문으로 답변 생성.
+   * 503/500/429 등 일시 오류는 지수 백오프로 재시도.
+   * **한 호출 안에서는 같은 API 키 사용** (재시도해도 동일 client).
+   */
   async generateAnswer(systemPrompt: string, userPrompt: string): Promise<string> {
+    const client = this.ensureClient();
+    return this.generateAnswerOnClient(client, systemPrompt, userPrompt);
+  }
+
+  /** 지정된 client(== 지정된 API 키)로 답변 생성 + 재시도. */
+  private async generateAnswerOnClient(
+    client: GoogleGenAI,
+    systemPrompt: string,
+    userPrompt: string,
+  ): Promise<string> {
     let lastErr: unknown;
     for (let attempt = 0; attempt < LLM_MAX_RETRIES; attempt++) {
-      const client = this.ensureClient();
       try {
         const res = await client.models.generateContent({
           model: LLM_MODEL,
@@ -189,15 +211,17 @@ export class LlmService implements OnModuleInit {
    * - 두 경우 모두 Search Grounding 과금 0건 보장.
    */
   async generateGroundedAnswer(systemPrompt: string, userPrompt: string): Promise<GroundedAnswer> {
+    // 한 호출 안에서는 같은 client(== 같은 API 키)를 grounding 시도 + retry + fallback 모두 공유.
+    const client = this.ensureClient();
+
     if (!isSearchGroundingEnabled()) {
       this.logger.log('Search Grounding 비활성화 (ENABLE_SEARCH_GROUNDING=false) — 일반 호출');
-      const text = await this.generateAnswer(systemPrompt, userPrompt);
+      const text = await this.generateAnswerOnClient(client, systemPrompt, userPrompt);
       return { text, groundingChunks: [] };
     }
 
     let lastErr: unknown;
     for (let attempt = 0; attempt < LLM_MAX_RETRIES; attempt++) {
-      const client = this.ensureClient();
       try {
         const res = await client.models.generateContent({
           model: LLM_MODEL,
@@ -217,8 +241,8 @@ export class LlmService implements OnModuleInit {
         // 1) quota/billing/권한 거부 → 즉시 grounding 끄고 일반 호출로 폴백 (재시도해도 같은 결과).
         const quotaIssue = /quota|billing|PERMISSION_DENIED|FAILED_PRECONDITION/i.test(msg);
         if (quotaIssue) {
-          this.logger.warn(`Search Grounding 거부 — grounding 없이 일반 호출로 폴백: ${msg.slice(0, 200)}`);
-          const text = await this.generateAnswer(systemPrompt, userPrompt);
+          this.logger.warn(`Search Grounding 거부 — grounding 없이 일반 호출로 폴백 (같은 client 유지): ${msg.slice(0, 200)}`);
+          const text = await this.generateAnswerOnClient(client, systemPrompt, userPrompt);
           return { text, groundingChunks: [] };
         }
 
@@ -233,9 +257,9 @@ export class LlmService implements OnModuleInit {
 
         // 3) 끝까지 retriable 503 등 → 마지막 보루로 grounding 없이 일반 호출 시도 (그것 또한 retry 보호됨).
         if (retriable) {
-          this.logger.warn(`Search Grounding 재시도 소진 — grounding 없이 일반 호출로 폴백: ${msg.slice(0, 200)}`);
+          this.logger.warn(`Search Grounding 재시도 소진 — grounding 없이 일반 호출로 폴백 (같은 client 유지): ${msg.slice(0, 200)}`);
           try {
-            const text = await this.generateAnswer(systemPrompt, userPrompt);
+            const text = await this.generateAnswerOnClient(client, systemPrompt, userPrompt);
             return { text, groundingChunks: [] };
           } catch (fallbackErr) {
             throw fallbackErr instanceof Error ? fallbackErr : new Error(String(fallbackErr));
