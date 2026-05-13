@@ -6,6 +6,7 @@ import { SttModule } from './stt/stt.module';
 import { EmbedModule } from './embed/embed.module';
 import { AskModule } from './ask/ask.module';
 import { SummarizeModule } from './summarize/summarize.module';
+import { HealthModule } from './health/health.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { SummarizeModule } from './summarize/summarize.module';
     EmbedModule,
     AskModule,
     SummarizeModule,
+    HealthModule,
   ],
   controllers: [],
   providers: [],
