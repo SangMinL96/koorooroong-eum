@@ -5,9 +5,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Animated, AppState, type AppStateStatus, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useSWRConfig } from 'swr';
-import { appendAudio, uploadAudio } from '@/domain/recording/api/uploadAudio';
-import { recordingsKeys } from '@/domain/recording/hooks/useRecordings';
+import { useStartUpload } from '@/domain/recording/hooks/useStartUpload';
 import { useRecordingsStore } from '@/domain/recording/store/useRecordingsStore';
 import { colors, radius, spacing, typography } from '@/lib/theme';
 
@@ -36,8 +34,8 @@ export default function RecordScreen() {
   const router = useRouter();
   const { appendTo } = useLocalSearchParams<{ appendTo?: string }>();
   const isAppendMode = typeof appendTo === 'string' && appendTo.length > 0;
-  const { mutate: globalMutate } = useSWRConfig();
   const activeJob = useRecordingsStore((s) => s.activeJob);
+  const startUpload = useStartUpload();
   const isUploading = activeJob !== null;
 
   const [permission, setPermission] = useState<boolean | null>(null);
@@ -192,52 +190,18 @@ export default function RecordScreen() {
     setPhase('idle');
   };
 
-  const startJob = useRecordingsStore((s) => s.startJob);
-  const updateJobStage = useRecordingsStore((s) => s.updateJobStage);
-  const clearJob = useRecordingsStore((s) => s.clearJob);
-
   const submit = () => {
     if (!recordedUri) return;
     const jobName = isAppendMode && appendTo ? '이어 녹음' : name.trim() || defaultRecordingName();
+    const asset = { uri: recordedUri, name: 'recording.m4a', mimeType: 'audio/m4a' };
 
-    // 1) 글로벌 작업 시작 등록 (화면 떠나도 진행률 유지)
-    startJob({ name: jobName, appendTo, stage: 'stt' });
-
-    // 2) 사용자는 즉시 홈/디테일로 복귀 — 처리는 백그라운드 promise 로 계속
     if (isAppendMode && appendTo) {
+      startUpload({ mode: 'append', appendTo, asset, name: jobName });
       router.replace({ pathname: '/recordings/[id]', params: { id: appendTo } });
     } else {
+      startUpload({ mode: 'new', name: jobName, asset });
       router.replace('/');
     }
-
-    // 3) 백그라운드 promise — 결과는 globalMutate 로 SWR 캐시에 반영
-    (async () => {
-      try {
-        if (isAppendMode && appendTo) {
-          await appendAudio(
-            appendTo,
-            { uri: recordedUri, name: 'recording.m4a', mimeType: 'audio/m4a' },
-            (s) => updateJobStage(s),
-          );
-          globalMutate(recordingsKeys.list);
-          globalMutate(recordingsKeys.byId(appendTo));
-        } else {
-          await uploadAudio(
-            {
-              name: jobName,
-              asset: { uri: recordedUri, name: 'recording.m4a', mimeType: 'audio/m4a' },
-            },
-            (s) => updateJobStage(s),
-          );
-          globalMutate(recordingsKeys.list);
-        }
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        Alert.alert(isAppendMode ? '이어 녹음 저장 실패' : '업로드 실패', msg);
-      } finally {
-        clearJob();
-      }
-    })();
   };
 
   const isRecording = phase === 'recording';

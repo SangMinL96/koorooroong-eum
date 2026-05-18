@@ -1,9 +1,10 @@
 import { Link, useFocusEffect } from 'expo-router';
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSWRConfig } from 'swr';
 import { recordingsKeys, useRecordings } from '@/domain/recording/hooks/useRecordings';
+import { useRetryFailedJob } from '@/domain/recording/hooks/useStartUpload';
 import { useRecordingsStore } from '@/domain/recording/store/useRecordingsStore';
 import { colors, radius, spacing, typography } from '@/lib/theme';
 
@@ -26,6 +27,9 @@ export default function Home() {
   const { data, isLoading, mutate } = useRecordings();
   const { mutate: globalMutate } = useSWRConfig();
   const activeJob = useRecordingsStore((s) => s.activeJob);
+  const failedJob = useRecordingsStore((s) => s.failedJob);
+  const clearFailedJob = useRecordingsStore((s) => s.clearFailedJob);
+  const retryFailed = useRetryFailedJob();
 
   useFocusEffect(
     useCallback(() => {
@@ -56,6 +60,25 @@ export default function Home() {
             </Text>
             <Text style={styles.jobBannerSubtitle}>{STAGE_LABEL[activeJob.stage]}</Text>
           </View>
+        </View>
+      ) : null}
+
+      {failedJob && !activeJob ? (
+        <View style={styles.failBanner}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.failBannerTitle} numberOfLines={1}>
+              업로드 실패: "{failedJob.name}"
+            </Text>
+            <Text style={styles.failBannerSubtitle} numberOfLines={2}>
+              {failedJob.reason}
+            </Text>
+          </View>
+          <Pressable onPress={retryFailed} style={styles.failBtnPrimary} hitSlop={8}>
+            <Text style={styles.failBtnPrimaryText}>재시도</Text>
+          </Pressable>
+          <Pressable onPress={clearFailedJob} style={styles.failBtnSecondary} hitSlop={8}>
+            <Text style={styles.failBtnSecondaryText}>무시</Text>
+          </Pressable>
         </View>
       ) : null}
 
@@ -118,6 +141,35 @@ const styles = StyleSheet.create({
   },
   jobBannerTitle: { ...typography.label, color: colors.text },
   jobBannerSubtitle: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },
+  failBanner: {
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: colors.bg,
+    borderWidth: 1,
+    borderColor: colors.danger,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  failBannerTitle: { ...typography.label, color: colors.danger },
+  failBannerSubtitle: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },
+  failBtnPrimary: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+    backgroundColor: colors.brand,
+  },
+  failBtnPrimaryText: { color: colors.onBrand, ...typography.button },
+  failBtnSecondary: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  failBtnSecondaryText: { color: colors.text, ...typography.button },
   listContent: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl2, gap: spacing.md },
   card: {
     padding: spacing.lg,

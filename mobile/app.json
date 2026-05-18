@@ -60,6 +60,16 @@
             }
           }
         }
+      ],
+      [
+        "expo-share-intent",
+        {
+          "androidIntentFilters": ["audio/*"],
+          "iosActivationRules": {
+            "NSExtensionActivationSupportsAttachmentsWithMaxCount": 1
+          },
+          "disableExperimental": true
+        }
       ]
     ],
     "experiments": {

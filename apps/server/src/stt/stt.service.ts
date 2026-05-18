@@ -16,8 +16,7 @@ export class SttService {
     if (!buffer?.length) {
       throw new Error('empty_audio');
     }
-    const base64 = buffer.toString('base64');
-    const transcript = (await this.whisper.transcribe(base64, mimeType)).trim();
+    const transcript = (await this.whisper.transcribe(buffer, mimeType)).trim();
     if (!transcript) {
       throw new Error('empty_transcript');
     }

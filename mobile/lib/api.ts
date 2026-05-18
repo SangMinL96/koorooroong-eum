@@ -8,25 +8,29 @@ export class ApiError extends Error {
   }
 }
 
-async function unwrap<T>(res: Response): Promise<T> {
-  const text = await res.text();
+/** 서버 envelope({ ok, data } | { ok:false, error }) 를 풀어 data 만 반환. 실패시 ApiError throw. */
+export function parseApiEnvelope<T>(status: number, text: string): T {
   let parsed: unknown;
   try {
     parsed = text ? JSON.parse(text) : null;
   } catch {
     parsed = text;
   }
-  if (!res.ok) {
-    throw new ApiError(res.status, parsed);
+  if (status < 200 || status >= 300) {
+    throw new ApiError(status, parsed);
   }
   const body = parsed as ApiResponse<T> | null;
   if (!body || typeof body !== 'object' || !('ok' in body)) {
-    throw new ApiError(res.status, parsed);
+    throw new ApiError(status, parsed);
   }
   if (body.ok !== true) {
-    throw new ApiError(res.status, parsed);
+    throw new ApiError(status, parsed);
   }
   return body.data;
+}
+
+async function unwrap<T>(res: Response): Promise<T> {
+  return parseApiEnvelope<T>(res.status, await res.text());
 }
 
 /** JSON POST. */

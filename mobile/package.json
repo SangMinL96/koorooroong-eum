@@ -24,6 +24,7 @@
     "expo-keep-awake": "~14.0.3",
     "expo-linking": "~7.0.0",
     "expo-router": "~4.0.0",
+    "expo-share-intent": "^3",
     "expo-status-bar": "~2.0.0",
     "expo-updates": "~0.27.5",
     "react": "18.3.1",
