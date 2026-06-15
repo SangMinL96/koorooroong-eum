@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   HttpCode,
+  Logger,
   NotFoundException,
   Param,
   Post,
@@ -56,6 +57,8 @@ const MAX_AUDIO_BYTES = 50 * 1024 * 1024;
 
 @Controller('stt')
 export class SttController {
+  private readonly logger = new Logger(SttController.name);
+
   constructor(private readonly stt: SttService) {}
 
   /**
@@ -82,6 +85,9 @@ export class SttController {
       throw new BadRequestException('empty audio');
     }
     const jobId = this.stt.createJob(file.buffer, file.mimetype);
+    this.logger.log(
+      `[Stt] enqueue jobId=${jobId} mime=${file.mimetype} bytes=${file.buffer.length}`,
+    );
     return { ok: true, data: { jobId } };
   }
 
@@ -90,8 +96,10 @@ export class SttController {
   status(@Param('jobId') jobId: string): { ok: true; data: SttJobStatus } {
     const job = this.stt.getJob(jobId);
     if (!job) {
+      this.logger.warn(`[Stt] poll jobId=${jobId} → 404 (미존재/유실)`);
       throw new NotFoundException('job not found');
     }
+    this.logger.log(`[Stt] poll jobId=${jobId} → ${job.status}`);
     return { ok: true, data: job };
   }
 }

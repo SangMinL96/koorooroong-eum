@@ -32,12 +32,16 @@ export class SttService {
   }
 
   private async process(jobId: string, buffer: Buffer, mimeType: string): Promise<void> {
+    const startedAt = Date.now();
     try {
       const result = await this.transcribeAndChunk(buffer, mimeType);
       this.jobs.set(jobId, { status: 'done', result });
+      this.logger.log(
+        `[Stt] 작업 ${jobId} 완료 (${Date.now() - startedAt}ms, transcript=${result.transcript.length}자, chunks=${result.chunks.length})`,
+      );
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
-      this.logger.warn(`[Stt] 작업 ${jobId} 실패: ${error}`);
+      this.logger.warn(`[Stt] 작업 ${jobId} 실패 (${Date.now() - startedAt}ms): ${error}`);
       this.jobs.set(jobId, { status: 'error', error });
     } finally {
       // 완료/실패 후 일정 시간 뒤 정리. 폴링이 가져갈 시간은 충분히 준다.
