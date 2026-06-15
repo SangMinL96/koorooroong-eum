@@ -33,6 +33,15 @@ async function unwrap<T>(res: Response): Promise<T> {
   return parseApiEnvelope<T>(res.status, await res.text());
 }
 
+/** JSON GET. */
+export async function apiGetJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${API_HOST}/api${path}`, {
+    method: 'GET',
+    ...init,
+  });
+  return unwrap<T>(res);
+}
+
 /** JSON POST. */
 export async function apiPostJson<T>(path: string, body: unknown, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_HOST}/api${path}`, {

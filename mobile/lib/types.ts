@@ -11,13 +11,28 @@ export interface ApiErr {
 
 export type ApiResponse<T> = ApiOk<T> | ApiErr;
 
-/** POST /stt — multipart/form-data 업로드 (field: file) */
+/** POST /stt — multipart/form-data 업로드 (field: file). 파일만 받고 즉시 작업 ID 반환(202). */
 export interface SttResponse {
   /** 전체 전사 텍스트 (줄바꿈 포함) */
   transcript: string;
   /** 서버에서 청크 분할된 텍스트. 임베딩할 단위와 1:1 대응. */
   chunks: string[];
 }
+
+/**
+ * POST /stt 응답. 위스퍼 전사는 길어서 동기 응답 시 클라이언트가 타임아웃되므로,
+ * 업로드만 받고 작업을 백그라운드로 돌린 뒤 jobId 를 반환한다.
+ * 클라이언트는 GET /stt/:jobId 로 결과를 폴링한다.
+ */
+export interface SttJobCreated {
+  jobId: string;
+}
+
+/** GET /stt/:jobId — 작업 상태 폴링 결과. */
+export type SttJobStatus =
+  | { status: 'processing' }
+  | { status: 'done'; result: SttResponse }
+  | { status: 'error'; error: string };
 
 /** POST /embed */
 export interface EmbedBody {

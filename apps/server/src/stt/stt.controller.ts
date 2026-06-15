@@ -1,16 +1,18 @@
 import {
   BadRequestException,
   Controller,
-  HttpException,
+  Get,
+  HttpCode,
+  NotFoundException,
+  Param,
   Post,
-  UnprocessableEntityException,
   UnsupportedMediaTypeException,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import 'multer';
-import type { SttResponse } from '@koorooroong-eum/shared-types';
+import type { SttJobCreated, SttJobStatus } from '@koorooroong-eum/shared-types';
 import { SttService } from './stt.service';
 
 // ffmpeg(faster-whisper 의존)가 디코딩 가능한 보편 오디오 포맷.
@@ -56,34 +58,40 @@ const MAX_AUDIO_BYTES = 50 * 1024 * 1024;
 export class SttController {
   constructor(private readonly stt: SttService) {}
 
+  /**
+   * 업로드만 받고 즉시 jobId 를 반환(202). 전사는 백그라운드에서 진행되며,
+   * 결과는 GET /stt/:jobId 폴링으로 가져간다. (긴 동기 응답으로 인한 클라이언트 타임아웃 회피)
+   */
   @Post()
+  @HttpCode(202)
   @UseInterceptors(
     FileInterceptor('file', {
       limits: { fileSize: MAX_AUDIO_BYTES },
     }),
   )
-  async transcribe(
+  async enqueue(
     @UploadedFile() file: Express.Multer.File | undefined,
-  ): Promise<{ ok: true; data: SttResponse }> {
+  ): Promise<{ ok: true; data: SttJobCreated }> {
     if (!file) {
       throw new BadRequestException('file required');
     }
     if (!ALLOWED_AUDIO_MIME.has(file.mimetype)) {
       throw new UnsupportedMediaTypeException(`unsupported mimetype: ${file.mimetype}`);
     }
-    try {
-      const data = await this.stt.transcribeAndChunk(file.buffer, file.mimetype);
-      return { ok: true, data };
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (msg === 'empty_audio') {
-        throw new BadRequestException('empty audio');
-      }
-      if (msg === 'empty_transcript') {
-        throw new UnprocessableEntityException('empty transcript');
-      }
-      if (err instanceof HttpException) throw err;
-      throw err;
+    if (!file.buffer?.length) {
+      throw new BadRequestException('empty audio');
     }
+    const jobId = this.stt.createJob(file.buffer, file.mimetype);
+    return { ok: true, data: { jobId } };
+  }
+
+  /** 작업 상태 폴링. processing / done(결과 포함) / error 를 반환. 미존재 jobId 는 404. */
+  @Get(':jobId')
+  status(@Param('jobId') jobId: string): { ok: true; data: SttJobStatus } {
+    const job = this.stt.getJob(jobId);
+    if (!job) {
+      throw new NotFoundException('job not found');
+    }
+    return { ok: true, data: job };
   }
 }

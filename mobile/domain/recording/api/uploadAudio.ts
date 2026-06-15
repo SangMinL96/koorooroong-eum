@@ -1,6 +1,6 @@
 import * as FileSystem from 'expo-file-system';
-import type { EmbedBody, EmbedResponse, SttResponse } from '@/lib/types';
-import { apiPostJson, parseApiEnvelope } from '@/lib/api';
+import type { EmbedBody, EmbedResponse, SttJobCreated, SttJobStatus, SttResponse } from '@/lib/types';
+import { ApiError, apiGetJson, apiPostJson, parseApiEnvelope } from '@/lib/api';
 import { inferAudioMime } from '@/lib/audioMime';
 import { API_HOST } from '@/lib/env';
 import { appendToRecording, writeRecording } from '../store/fileStore';
@@ -61,14 +61,58 @@ async function copyToAsciiCachePath(srcUri: string, originalName?: string | null
   return dest;
 }
 
+/** 폴링 주기. 서버는 작업을 인메모리에 들고 있으므로 짧게 자주 확인해도 부담 적음. */
+const STT_POLL_INTERVAL_MS = 2000;
+/** 전체 폴링 한계. 서버 위스퍼 요청당 한계(10분)와 맞춤. */
+const STT_POLL_TIMEOUT_MS = 10 * 60 * 1000;
+/** 폴링 중 일시적 네트워크 오류 허용 횟수 (연속). 초과 시 실패 처리. */
+const STT_POLL_MAX_TRANSIENT_ERRORS = 5;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
 /**
- * STT 업로드. expo-file-system 의 native upload task (iOS URLSession background) 로 보내
- * 앱이 백그라운드/잠금화면에 있어도 HTTP 요청이 끊기지 않는다.
- * - iOS: sessionType=BACKGROUND → JS suspend 후에도 OS 가 끝까지 끌고 감, 포그라운드 복귀 시 Promise 해결
+ * jobId 를 받아 GET /stt/:jobId 로 결과를 폴링한다.
+ * - done → 전사 결과 반환
+ * - error → 서버가 보고한 사유로 throw
+ * - 404(ApiError) → 작업 유실(서버 재시작 등) 즉시 실패
+ * - 그 외 네트워크 블립 → 몇 번까지 관용 후 재시도
+ */
+async function pollSttJob(jobId: string): Promise<SttResponse> {
+  const deadline = Date.now() + STT_POLL_TIMEOUT_MS;
+  let transientErrors = 0;
+  while (Date.now() < deadline) {
+    let status: SttJobStatus | null = null;
+    try {
+      status = await apiGetJson<SttJobStatus>(`/stt/${jobId}`);
+      transientErrors = 0;
+    } catch (err) {
+      // 서버가 작업을 모르면(404 등) 재시도 의미 없음 → 즉시 실패.
+      if (err instanceof ApiError) throw err;
+      // 네트워크 블립은 한도까지 관용.
+      if (++transientErrors > STT_POLL_MAX_TRANSIENT_ERRORS) throw err;
+    }
+    if (status) {
+      if (status.status === 'done') return status.result;
+      if (status.status === 'error') throw new Error(status.error || 'stt_failed');
+    }
+    await sleep(STT_POLL_INTERVAL_MS);
+  }
+  throw new Error('stt_timeout');
+}
+
+/**
+ * STT 업로드. expo-file-system 의 native upload task (iOS URLSession background) 로 파일을 보내고
+ * 서버는 즉시 jobId 만 반환(202)하므로 업로드 연결은 짧게 끝난다.
+ * 이후 GET /stt/:jobId 폴링으로 전사 결과를 받는다.
+ *  → 긴 위스퍼 처리 동안 무음 연결을 유지하다 클라이언트 타임아웃 나던 문제를 해소.
+ * - iOS: sessionType=BACKGROUND → JS suspend 후에도 OS 가 업로드를 끝까지 끌고 감
  * - Android: sessionType 무시(항상 native task), 단 OS Doze 영향은 남으므로 keep-awake 와 병행
  */
 async function uploadSttFile(asset: UploadInput['asset']): Promise<SttResponse> {
   const asciiPath = await copyToAsciiCachePath(asset.uri, asset.name);
+  let jobId: string;
   try {
     const result = await FileSystem.uploadAsync(`${API_HOST}/api/stt`, asciiPath, {
       httpMethod: 'POST',
@@ -77,10 +121,11 @@ async function uploadSttFile(asset: UploadInput['asset']): Promise<SttResponse> 
       mimeType: asset.mimeType ?? inferAudioMime(asset.name),
       sessionType: FileSystem.FileSystemSessionType.BACKGROUND,
     });
-    return parseApiEnvelope<SttResponse>(result.status, result.body);
+    jobId = parseApiEnvelope<SttJobCreated>(result.status, result.body).jobId;
   } finally {
     await FileSystem.deleteAsync(asciiPath, { idempotent: true }).catch(() => undefined);
   }
+  return pollSttJob(jobId);
 }
 
 export async function uploadAudio(
